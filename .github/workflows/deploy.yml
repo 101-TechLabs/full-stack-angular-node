@@ -22,4 +22,5 @@ jobs:
           script: |
             cd /home/ubuntu/full-stack-angular-node
             git pull
+            docker compose down
             docker compose up -d --build
