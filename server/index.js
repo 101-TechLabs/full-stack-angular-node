@@ -7,7 +7,7 @@ app.use(express.json())
 app.use(cors({
     origin: [
         "http://localhost:4200",
-        "http://46.202.167.63"
+        "http://46.202.167.63:4200/"
         //add production url or ip
     ],
     credentials: true,
