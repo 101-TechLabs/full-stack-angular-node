@@ -1,0 +1,37 @@
+# Node modules
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Angular build output
+dist
+out-tsc
+
+# Environment files (optional – if you inject at runtime)
+src/environments/*.local.ts
+
+# Git
+.git
+.gitignore
+
+# Docker files (optional)
+Dockerfile
+docker-compose.yml
+
+# IDE / OS files
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Tests & coverage
+coverage
+e2e
+
+# Misc
+*.log
+.env
+.env.*
