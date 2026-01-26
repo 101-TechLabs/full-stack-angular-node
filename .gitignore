@@ -34,6 +34,7 @@ client/out-tsc/
 ####################################
 dist/
 .angular/
+.vscode/
 
 ####################################
 # Environment files
