@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  server:
+    build: ./server
+    container_name: express-server
+    ports:
+      - "4000:4000"
+    networks:
+      - full-stack-net
+    restart: unless-stopped
+
+  client:
+    build: ./client
+    container_name: angular-client
+    ports:
+      - "4200:80"
+    networks:
+      - full-stack-net
+    depends_on:
+      - server
+    restart: unless-stopped
+
+networks:
+  full-stack-net:
+    driver: bridge
