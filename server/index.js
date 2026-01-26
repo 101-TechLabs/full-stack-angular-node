@@ -10,7 +10,7 @@ app.use(cors({
         "http://46.202.167.63:4200"
     ],
     credentials: true,
-    methods: ["GET"]
+    methods: ["GET", "POST"]
 }));
 
 
