@@ -24,7 +24,7 @@ jobs:
           script: |
             set -e
 
-            echo "🚀 Starting deployment for branch: ${{ github.ref_name }}"
+            echo "🚀 Starting deployment (all environments)"
 
             cd /home/ubuntu/full-stack-angular-node
 
@@ -34,22 +34,13 @@ jobs:
             # ---------- ENV FILE SETUP ----------
             mkdir -p server
 
-            if [ "${{ github.ref_name }}" = "dev" ]; then
-              echo "${{ secrets.DEV_ENV_FILE }}" > server/.env.dev
-              echo "Deploying DEV environment"
-              docker compose up -d --build api-dev ui-dev
-            fi
+            echo "${{ secrets.DEV_ENV_FILE }}"  > server/.env.dev
+            echo "${{ secrets.QA_ENV_FILE }}"   > server/.env.qa
+            echo "${{ secrets.PROD_ENV_FILE }}" > server/.env.prod
 
-            if [ "${{ github.ref_name }}" = "qa" ]; then
-              echo "${{ secrets.QA_ENV_FILE }}" > server/.env.qa
-              echo "Deploying QA environment"
-              docker compose up -d --build api-qa ui-qa
-            fi
+            echo "📦 Deploying DEV + QA + PROD"
 
-            if [ "${{ github.ref_name }}" = "main" ]; then
-              echo "${{ secrets.PROD_ENV_FILE }}" > server/.env.prod
-              echo "Deploying PROD environment"
-              docker compose up -d --build api-prod ui-prod
-            fi
+            docker compose down --remove-orphans
+            docker compose up -d --build
 
-            echo "✅ Deployment finished successfully"
+            echo "✅ All environments deployed successfully"
