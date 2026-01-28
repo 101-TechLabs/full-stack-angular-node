@@ -1,23 +1,80 @@
 services:
-  server:
+  api-dev:
     build: ./server
-    container_name: express-server
+    container_name: api-dev
+    env_file:
+      - ./server/.env.dev
     ports:
-      - "4000:4000"
-    networks:
-      - full-stack-net
+      - "4001:4001"
     restart: unless-stopped
 
-  client:
-    build: ./client
-    container_name: angular-client
+  api-qa:
+    build: ./server
+    container_name: api-qa
+    env_file:
+      - ./server/.env.qa
+    ports:
+      - "4002:4002"
+    restart: unless-stopped
+
+  api-prod:
+    build: ./server
+    container_name: api-prod
+    env_file:
+      - ./server/.env.prod
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  ui-dev:
+    build:
+      context: ./client
+      args:
+        BUILD_ENV: dev
+    container_name: ui-dev
+    ports:
+      - "4201:80"
+    restart: unless-stopped
+
+  ui-qa:
+    build:
+      context: ./client
+      args:
+        BUILD_ENV: qa
+    container_name: ui-qa
+    ports:
+      - "4202:80"
+    restart: unless-stopped
+
+  ui-prod:
+    build:
+      context: ./client
+      args:
+        BUILD_ENV: production
+    container_name: ui-prod
     ports:
       - "4200:80"
-    networks:
-      - full-stack-net
-    depends_on:
-      - server
     restart: unless-stopped
+
+#  server:
+#     build: ./server
+#     container_name: express-server
+#     ports:
+#       - "4000:4000"
+#     networks:
+#       - full-stack-net
+#     restart: unless-stopped
+
+#   client:
+#     build: ./client
+#     container_name: angular-client
+#     ports:
+#       - "4200:80"
+#     networks:
+#       - full-stack-net
+#     depends_on:
+#       - server
+#     restart: unless-stopped
 
 networks:
   full-stack-net:

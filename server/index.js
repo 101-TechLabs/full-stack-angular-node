@@ -1,13 +1,19 @@
 import express from "express";
 import cors from 'cors'
-const PORT = 4000
+import dotenv from 'dotenv'
+dotenv.config()
+const PORT = process.env.PORT
 const app = express()
 
 app.use(express.json())
 app.use(cors({
     origin: [
         "http://localhost:4200",
-        "http://46.202.167.63:4200"
+        "http://localhost:4201",
+        "http://localhost:4202",
+        "http://46.202.167.63:4200",
+        "http://46.202.167.63:4201",
+        "http://46.202.167.63:4202"
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT"]

@@ -10,7 +10,14 @@ RUN npm install
 
 COPY . .
 
-RUN npm run build
+# 🔑 Build-time environment (dev | qa | production)
+ARG BUILD_ENV=production
+
+# Optional: log env during build (debug friendly)
+RUN echo "Building Angular for environment: $BUILD_ENV"
+
+# Angular build with configuration
+RUN npm run build -- --configuration=$BUILD_ENV
 
 # =========================
 # Stage 2: Nginx

@@ -1,8 +1,10 @@
-name: Deploy fullstack application to VPS
+name: Deploy Fullstack App to VPS
 
 on:
   push:
     branches:
+      - dev
+      - qa
       - main
 
 jobs:
@@ -10,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy Via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -22,5 +24,18 @@ jobs:
           script: |
             cd /home/ubuntu/full-stack-angular-node
             git pull
-            docker compose down
-            docker compose up -d --build
+
+            if [ "${{ github.ref_name }}" = "dev" ]; then
+              echo "Deploying DEV environment"
+              docker compose up -d --build api-dev ui-dev
+            fi
+
+            if [ "${{ github.ref_name }}" = "qa" ]; then
+              echo "Deploying QA environment"
+              docker compose up -d --build api-qa ui-qa
+            fi
+
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              echo "Deploying PROD environment"
+              docker compose up -d --build api-prod ui-prod
+            fi
