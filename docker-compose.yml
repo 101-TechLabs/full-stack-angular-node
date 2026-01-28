@@ -1,29 +1,14 @@
+version: "3.9"
+
 services:
+  # ---------------- DEV ----------------
   api-dev:
     build: ./server
     container_name: api-dev
     env_file:
       - ./server/.env.dev
     ports:
-      - "4001:4001"
-    restart: unless-stopped
-
-  api-qa:
-    build: ./server
-    container_name: api-qa
-    env_file:
-      - ./server/.env.qa
-    ports:
-      - "4002:4002"
-    restart: unless-stopped
-
-  api-prod:
-    build: ./server
-    container_name: api-prod
-    env_file:
-      - ./server/.env.prod
-    ports:
-      - "4000:4000"
+      - "4001:4000"
     restart: unless-stopped
 
   ui-dev:
@@ -36,6 +21,16 @@ services:
       - "4201:80"
     restart: unless-stopped
 
+  # ---------------- QA ----------------
+  api-qa:
+    build: ./server
+    container_name: api-qa
+    env_file:
+      - ./server/.env.qa
+    ports:
+      - "4002:4000"
+    restart: unless-stopped
+
   ui-qa:
     build:
       context: ./client
@@ -44,6 +39,16 @@ services:
     container_name: ui-qa
     ports:
       - "4202:80"
+    restart: unless-stopped
+
+  # ---------------- PROD ----------------
+  api-prod:
+    build: ./server
+    container_name: api-prod
+    env_file:
+      - ./server/.env.prod
+    ports:
+      - "4000:4000"
     restart: unless-stopped
 
   ui-prod:
