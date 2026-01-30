@@ -21,7 +21,7 @@ app.use(cors({
 
 
 app.get('/api/message', (req, res) => {
-    res.json('Production Backend is working fine')
+    res.json('dev backend is working fine')
 })
 
 app.listen(PORT, () => {
