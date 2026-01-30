@@ -15,7 +15,82 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set environment based on branch
+        id: set-env
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "ENV=prod" >> $GITHUB_OUTPUT
+            echo "PORT_FRONTEND=3000" >> $GITHUB_OUTPUT
+            echo "PORT_BACKEND=5000" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "qa" ]]; then
+            echo "ENV=qa" >> $GITHUB_OUTPUT
+            echo "PORT_FRONTEND=3001" >> $GITHUB_OUTPUT
+            echo "PORT_BACKEND=5001" >> $GITHUB_OUTPUT
+          else
+            echo "ENV=dev" >> $GITHUB_OUTPUT
+            echo "PORT_FRONTEND=3002" >> $GITHUB_OUTPUT
+            echo "PORT_BACKEND=5002" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_REF_NAME
+          script: |
+            set -e
+
+            echo "🚀 Starting deployment for $GITHUB_REF_NAME environment"
+
+            # Navigate to project directory
+            cd /home/ubuntu/full-stack-angular-node || { echo "❌ Project directory not found"; exit 1; }
+
+            # Update code
+            echo "📥 Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/$GITHUB_REF_NAME
+
+            # Determine environment
+            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+              ENV="prod"
+              COMPOSE_FILE="docker-compose.prod.yml"
+            elif [[ "$GITHUB_REF_NAME" == "qa" ]]; then
+              ENV="qa"
+              COMPOSE_FILE="docker-compose.qa.yml"
+            else
+              ENV="dev"
+              COMPOSE_FILE="docker-compose.dev.yml"
+            fi
+
+            echo "🔧 Setting up environment: $ENV"
+
+            # Create server directory if it doesn't exist
+            mkdir -p server
+
+            # Stop existing containers for this environment only
+            echo "🧹 Stopping existing $ENV containers..."
+            docker compose -f $COMPOSE_FILE down || true
+
+            # Prune unused resources
+            docker system prune -f
+
+            # Build and start containers
+            echo "📦 Building and starting $ENV containers..."
+            docker compose -f $COMPOSE_FILE up -d --build
+
+            # Wait for services to be ready
+            echo "⏳ Waiting for services to start..."
+            sleep 10
+
+            # Health check
+            echo "🏥 Checking service health..."
+            docker compose -f $COMPOSE_FILE ps
+
+            echo "✅ Deployment completed successfully for $ENV environment"
+
+      - name: Create .env files on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -24,38 +99,42 @@ jobs:
           script: |
             set -e
 
-            echo "🚀 Starting clean deployment"
+            cd /home/ubuntu/full-stack-angular-node/server
 
+            # Create environment files securely
+            echo "${{ secrets.DEV_ENV_FILE }}" > .env.dev
+            echo "${{ secrets.QA_ENV_FILE }}" > .env.qa
+            echo "${{ secrets.PROD_ENV_FILE }}" > .env.prod
+
+            # Set proper permissions
+            chmod 600 .env.*
+
+            echo "✅ Environment files created successfully"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
             cd /home/ubuntu/full-stack-angular-node
 
-            # Update code
-            git fetch origin
-            git reset --hard origin/${GITHUB_REF_NAME}
+            # Determine environment
+            if [[ "${{ github.ref_name }}" == "main" ]]; then
+              COMPOSE_FILE="docker-compose.prod.yml"
+            elif [[ "${{ github.ref_name }}" == "qa" ]]; then
+              COMPOSE_FILE="docker-compose.qa.yml"
+            else
+              COMPOSE_FILE="docker-compose.dev.yml"
+            fi
 
-            # ---------- ENV FILE SETUP ----------
-            mkdir -p server
-            cat <<EOF > server/.env.dev
-            ${{ secrets.DEV_ENV_FILE }}
-            EOF
-
-                        cat <<EOF > server/.env.qa
-            ${{ secrets.QA_ENV_FILE }}
-            EOF
-
-                        cat <<EOF > server/.env.prod
-            ${{ secrets.PROD_ENV_FILE }}
-            EOF
-
-            echo "🧹 Cleaning up old containers and freeing ports"
-
-            # Stop and remove all containers (for safety)
-            docker ps -q | xargs -r docker stop
-            docker ps -aq | xargs -r docker rm -f
-
-            # Optional: remove old images to free space (uncomment if needed)
-            # docker images -q | xargs -r docker rmi -f
-
-            echo "📦 Building and starting new containers"
-            docker compose up -d --build
-
-            echo "✅ Deployment completed successfully"
+            # Check if all containers are running
+            if docker compose -f $COMPOSE_FILE ps | grep -q "Up"; then
+              echo "✅ All containers are running"
+              docker compose -f $COMPOSE_FILE ps
+            else
+              echo "❌ Some containers failed to start"
+              docker compose -f $COMPOSE_FILE logs --tail=50
+              exit 1
+            fi
