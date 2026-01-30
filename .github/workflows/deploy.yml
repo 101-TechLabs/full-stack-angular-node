@@ -15,23 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set environment based on branch
-        id: set-env
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "ENV=prod" >> $GITHUB_OUTPUT
-            echo "PORT_FRONTEND=3000" >> $GITHUB_OUTPUT
-            echo "PORT_BACKEND=5000" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref_name }}" == "qa" ]]; then
-            echo "ENV=qa" >> $GITHUB_OUTPUT
-            echo "PORT_FRONTEND=3001" >> $GITHUB_OUTPUT
-            echo "PORT_BACKEND=5001" >> $GITHUB_OUTPUT
-          else
-            echo "ENV=dev" >> $GITHUB_OUTPUT
-            echo "PORT_FRONTEND=3002" >> $GITHUB_OUTPUT
-            echo "PORT_BACKEND=5002" >> $GITHUB_OUTPUT
-          fi
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -52,45 +35,52 @@ jobs:
             git fetch origin
             git reset --hard origin/$GITHUB_REF_NAME
 
-            # Determine environment
+            # Determine environment and services
             if [[ "$GITHUB_REF_NAME" == "main" ]]; then
               ENV="prod"
-              COMPOSE_FILE="docker-compose.prod.yml"
+              SERVICES="api-prod ui-prod"
             elif [[ "$GITHUB_REF_NAME" == "qa" ]]; then
               ENV="qa"
-              COMPOSE_FILE="docker-compose.qa.yml"
+              SERVICES="api-qa ui-qa"
             else
               ENV="dev"
-              COMPOSE_FILE="docker-compose.dev.yml"
+              SERVICES="api-dev ui-dev"
             fi
 
             echo "🔧 Setting up environment: $ENV"
+            echo "   Services: $SERVICES"
 
             # Create server directory if it doesn't exist
             mkdir -p server
 
             # Stop existing containers for this environment only
             echo "🧹 Stopping existing $ENV containers..."
-            docker compose -f $COMPOSE_FILE down || true
+            docker compose stop $SERVICES 2>/dev/null || true
+            docker compose rm -f $SERVICES 2>/dev/null || true
 
             # Prune unused resources
+            echo "🧹 Cleaning up unused Docker resources..."
             docker system prune -f
 
-            # Build and start containers
+            # Build and start containers for this environment only
             echo "📦 Building and starting $ENV containers..."
-            docker compose -f $COMPOSE_FILE up -d --build
+            docker compose up -d --build $SERVICES
 
             # Wait for services to be ready
             echo "⏳ Waiting for services to start..."
-            sleep 10
+            sleep 15
 
             # Health check
             echo "🏥 Checking service health..."
-            docker compose -f $COMPOSE_FILE ps
+            docker compose ps $SERVICES
+
+            # Show recent logs
+            echo "📋 Recent logs:"
+            docker compose logs --tail=20 $SERVICES
 
             echo "✅ Deployment completed successfully for $ENV environment"
 
-      - name: Create .env files on VPS
+      - name: Setup environment files
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -101,7 +91,7 @@ jobs:
 
             cd /home/ubuntu/full-stack-angular-node/server
 
-            # Create environment files securely
+            # Create all environment files
             echo "${{ secrets.DEV_ENV_FILE }}" > .env.dev
             echo "${{ secrets.QA_ENV_FILE }}" > .env.qa
             echo "${{ secrets.PROD_ENV_FILE }}" > .env.prod
@@ -111,30 +101,122 @@ jobs:
 
             echo "✅ Environment files created successfully"
 
+      - name: Restart containers with new env files
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_REF_NAME
+          script: |
+            set -e
+
+            cd /home/ubuntu/full-stack-angular-node
+
+            # Determine services to restart
+            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+              SERVICES="api-prod ui-prod"
+            elif [[ "$GITHUB_REF_NAME" == "qa" ]]; then
+              SERVICES="api-qa ui-qa"
+            else
+              SERVICES="api-dev ui-dev"
+            fi
+
+            echo "🔄 Restarting containers to load new environment files..."
+            docker compose restart $SERVICES
+
+            echo "✅ Containers restarted successfully"
+
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ubuntu
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_REF_NAME
           script: |
             cd /home/ubuntu/full-stack-angular-node
 
-            # Determine environment
-            if [[ "${{ github.ref_name }}" == "main" ]]; then
-              COMPOSE_FILE="docker-compose.prod.yml"
-            elif [[ "${{ github.ref_name }}" == "qa" ]]; then
-              COMPOSE_FILE="docker-compose.qa.yml"
+            # Determine services to check
+            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+              SERVICES="api-prod ui-prod"
+              API_PORT=4000
+              UI_PORT=4200
+            elif [[ "$GITHUB_REF_NAME" == "qa" ]]; then
+              SERVICES="api-qa ui-qa"
+              API_PORT=4002
+              UI_PORT=4202
             else
-              COMPOSE_FILE="docker-compose.dev.yml"
+              SERVICES="api-dev ui-dev"
+              API_PORT=4001
+              UI_PORT=4201
             fi
 
             # Check if all containers are running
-            if docker compose -f $COMPOSE_FILE ps | grep -q "Up"; then
+            echo "🔍 Verifying containers are running..."
+            if docker compose ps $SERVICES | grep -E "(api-|ui-)" | grep -q "Up"; then
               echo "✅ All containers are running"
-              docker compose -f $COMPOSE_FILE ps
+              docker compose ps $SERVICES
+              
+              # Additional port checks
+              echo ""
+              echo "🔍 Verifying ports are listening..."
+              if ss -tuln | grep -q ":$API_PORT "; then
+                echo "✅ API is listening on port $API_PORT"
+              else
+                echo "⚠️  Warning: API port $API_PORT not detected"
+              fi
+              
+              if ss -tuln | grep -q ":$UI_PORT "; then
+                echo "✅ UI is listening on port $UI_PORT"
+              else
+                echo "⚠️  Warning: UI port $UI_PORT not detected"
+              fi
+              
             else
               echo "❌ Some containers failed to start"
-              docker compose -f $COMPOSE_FILE logs --tail=50
+              docker compose ps $SERVICES
+              echo ""
+              echo "📋 Container logs:"
+              docker compose logs --tail=50 $SERVICES
               exit 1
             fi
+
+      - name: Deployment summary
+        if: success()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_REF_NAME
+          script: |
+            cd /home/ubuntu/full-stack-angular-node
+
+            # Determine environment info
+            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+              ENV="Production"
+              API_PORT=4000
+              UI_PORT=4200
+            elif [[ "$GITHUB_REF_NAME" == "qa" ]]; then
+              ENV="QA"
+              API_PORT=4002
+              UI_PORT=4202
+            else
+              ENV="Development"
+              API_PORT=4001
+              UI_PORT=4201
+            fi
+
+            echo ""
+            echo "=========================================="
+            echo "✅ Deployment Summary"
+            echo "=========================================="
+            echo "Environment: $ENV"
+            echo "Branch: $GITHUB_REF_NAME"
+            echo "API URL: http://${{ secrets.VPS_HOST }}:$API_PORT"
+            echo "UI URL: http://${{ secrets.VPS_HOST }}:$UI_PORT"
+            echo "=========================================="
+            echo ""
+            echo "📊 Running containers:"
+            docker compose ps --format table
