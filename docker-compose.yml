@@ -8,7 +8,7 @@ services:
     env_file:
       - ./server/.env.dev
     ports:
-      - "4000:4000"
+      - "4001:4000"
     restart: unless-stopped
 
   ui-dev:
@@ -28,7 +28,7 @@ services:
     env_file:
       - ./server/.env.qa
     ports:
-      - "4002:4002"
+      - "4002:4000"
     restart: unless-stopped
 
   ui-qa:
