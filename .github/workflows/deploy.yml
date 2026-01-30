@@ -24,23 +24,38 @@ jobs:
           script: |
             set -e
 
-            echo "🚀 Starting deployment (all environments)"
+            echo "🚀 Starting clean deployment"
 
             cd /home/ubuntu/full-stack-angular-node
 
+            # Update code
             git fetch origin
-            git pull --rebase
+            git reset --hard origin/${GITHUB_REF_NAME}
 
             # ---------- ENV FILE SETUP ----------
             mkdir -p server
+            cat <<EOF > server/.env.dev
+            ${{ secrets.DEV_ENV_FILE }}
+            EOF
 
-            echo "${{ secrets.DEV_ENV_FILE }}"  > server/.env.dev
-            echo "${{ secrets.QA_ENV_FILE }}"   > server/.env.qa
-            echo "${{ secrets.PROD_ENV_FILE }}" > server/.env.prod
+                        cat <<EOF > server/.env.qa
+            ${{ secrets.QA_ENV_FILE }}
+            EOF
 
-            echo "📦 Deploying DEV + QA + PROD"
+                        cat <<EOF > server/.env.prod
+            ${{ secrets.PROD_ENV_FILE }}
+            EOF
 
-            docker compose down --remove-orphans
+            echo "🧹 Cleaning up old containers and freeing ports"
+
+            # Stop and remove all containers (for safety)
+            docker ps -q | xargs -r docker stop
+            docker ps -aq | xargs -r docker rm -f
+
+            # Optional: remove old images to free space (uncomment if needed)
+            # docker images -q | xargs -r docker rmi -f
+
+            echo "📦 Building and starting new containers"
             docker compose up -d --build
 
-            echo "✅ All environments deployed successfully"
+            echo "✅ Deployment completed successfully"
