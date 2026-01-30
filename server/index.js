@@ -15,7 +15,7 @@ app.use(cors({
 
 
 app.get('/api/message', (req, res) => {
-    res.json('Backed is working fine')
+    res.json('qa backend is working fine')
 })
 
 app.listen(PORT, () => {
